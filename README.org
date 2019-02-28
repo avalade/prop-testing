@@ -1,0 +1,177 @@
+#+Title: Property Based Testing Lunch and Learn
+#+Author: Aaron Valade
+#+Email: aaron@benchling.com
+
+#+OPTIONS: toc:1
+#+REVEAL_THEME: moon
+#+REVEAL_HLEVEL: 2
+#+REVEAL_HEAD_PREAMBLE: <meta name="description" content="Property Based Testing.">
+#+REVEAL_POSTAMBLE: <p> Created by yjwen. </p>
+#+REVEAL_PLUGINS: (markdown notes)
+
+* Property Based Testing
+
+#+BEGIN_QUOTE
+Writing tests first forces you to think about the problem you're
+solving.  Writing property-based tests forces you to think way
+harder.
+- Jessica Kerr (@jessitron)
+#+END_QUOTE
+
+* Let's talk about tests, baby
+#+NAME: symdiff-code
+#+begin_src typescript
+function symDiff<T>(
+  x: Array<T>,
+  y: Array<T>
+): Array<Array<T>> {
+  return [
+    _.flatten(x.filter((a) => !_.contains(y, a))),
+    _.flatten(y.filter((b) => !_.contains(x, b)))
+  ];
+}
+#+end_src
+
+* What unit tests do you write?
+#+ATTR_REVEAL: :frag appear
+- x contains no elements and y contains no elements
+#+ATTR_REVEAL: :frag appear
+- x contains an element and y contains no elements
+#+ATTR_REVEAL: :frag appear
+- x contains no elements and y contains an element
+#+ATTR_REVEAL: :frag appear
+- x contains the same elements as y
+#+ATTR_REVEAL: :frag appear
+- x contains some elements but not all the elements of y
+#+ATTR_REVEAL: :frag appear
+- y contains some elements but not all the elements of x
+
+* How many tests do you need!?!?
+
+* We could use fixtures
+#+begin_src typescript
+const emptyArrayOfNumbers: Array<number> =
+  [];
+const arrayWithOneNumber = [1];
+const myAdditionalNumber = 2;
+const arrayWithAnAdditionalNumber =
+  [...arrayWithOneNumber,
+   myAdditonalNumber];
+#+end_src
+* Then test
+#+begin_src typescript
+describe('symDiff', () => {
+  it('should return two empty arrays if both inputs are empty', () => {
+    const [a, b] = symDiff(emptyArrayOfNumbers, emptyArrayOfNumbers);
+    expect(a).empty();
+    expect(b).empty()
+  });
+  it('should return all of x if y is empty', () => {
+    const [a, b] = symDiff(arrayOfOneNumber, emptyArrayOfNumbers);
+    expect(a).eql(arrayOfOneNumber);
+    expect(b).empty();
+  })
+});
+#+end_src
+* Let's think about this a different way
+* What are the properties of the function?
+
+* What is a property?
+- If our y is an empty array, the first element of our return will be x
+- If our x is an empty array, the second element of our return will be y
+- If our x and y are equal, we get back two empty arrays
+* Let's code that
+#+begin_src typescript
+describe('symDiff', () => {
+  it('satisfies the identity property for the first argument', () => {
+    const anArrayOfNumbers = someArrayOfNumbers();
+    const [a, b] = symDiff(anArrayOfNumbers, []);
+    expect(a).eql(anArrayOfNumber);
+  });
+  it('satisfies the identity property of the second argument', () => {
+    const anArrayOfNumbers = someArrayOfNumbers();
+    const [a, b] = symDiff([], anArrayOfNumbers);
+    expect(b).eql(anArrayOfNumbers);
+  }));
+  it('satisfies the identity property if the two arguments are identical', () => {
+    const anArrayOfNumbers = someArrayOfNumbers();
+    const [a, b] = symDiff(anArrayOfNumbers, anArrayOfNumbers);
+    expect(a).empty();
+    expect(b).empty();
+  });
+});
+#+end_src
+* This property is what we were expressing in three of our unit tests
+#+ATTR_REVEAL: :frag appear
+- x contains no elements and y contains no elements
+#+ATTR_REVEAL: :frag appear
+- x contains an element and y contains no elements
+#+ATTR_REVEAL: :frag appear
+- x contains no elements and y contains an element
+#+ATTR_REVEAL: :frag appear
+- x contains the same elements as y
+* But what do we do for our someArrayOfNumber()?
+* Let's use FastCheck
+https://github.com/dubzzz/fast-check
+#+NAME: require-fc
+#+begin_src typescript
+const fc = require('fast-check');
+#+end_src
+* Updated code
+#+NAME: symdiff-spec
+#+begin_src typescript
+describe('symDiff', () => {
+  it('satisfies the identity property for the first argument', () => {
+    fc.assert(fc.property(fc.array(fc.integer()), (anArrayOfNumbers) => {
+      const [a, b] = symDiff(anArrayOfNumbers, []);
+      expect(a).eql(anArrayOfNumbers);
+    }));
+  });
+  it('satisfies the identity property of the second argument', () => {
+    fc.assert(fc.property(fc.array(fc.integer()), (anArrayOfNumbers) => {
+      const [a, b] = symDiff([], anArrayOfNumbers);
+      expect(b).eql(anArrayOfNumbers);
+    }));
+  });
+  it('satisfies the identity property if the two arguments are identical', () => {
+    fc.assert(fc.property(fc.array(fc.integer()), (anArrayOfNumbers) => {
+      const [a, b] = symDiff(anArrayOfNumbers, anArrayOfNumbers);
+      expect(a.length).eql(0);
+      expect(b.length).eql(0);
+    }));
+  });
+});
+#+end_src
+* What did that just do?
+- it just ran 100 tests with different arrays of numbers and checked that our properties held
+- it tried long arrays of numbers
+- it tried short arrays of numbers
+- it tried negative numbers
+- it tried HUGE numbers
+- it tried empty arrays
+* So what....
+
+* Generators
+- knows edge cases and makes sure those are run
+* Combining Generators
+- arrays of numbers =fc.array(fc.integer())=
+- arrays of strings =fc.array(fc.unicode())=
+- arrays of your object =fc.array(myAwesomeObjectArbitrary())=
+* Minimizing Test Failures
+- =long-string-with-a-snowman-☃= fails, it figures out that =☃= is the cause
+* So what...
+- isn't meant to replace all example tests
+- but can be helpful for testing polymorphic code
+- helpful way to think about your code
+
+* Code Export
+#+begin_src typescript :tangle src/code.ts :exports none :noweb yes
+import {expect} from 'chai';
+import fc from 'fast-check';
+import _ from 'underscore';
+
+<<require-fc>>
+<<symdiff-code>>
+
+<<symdiff-spec>>
+#+end_src
